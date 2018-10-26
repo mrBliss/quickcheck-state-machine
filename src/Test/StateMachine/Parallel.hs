@@ -42,7 +42,7 @@ import           Control.Monad
                    (foldM, replicateM)
 import           Control.Monad.Catch
                    (MonadCatch)
-import           Control.Monad.State
+import           Control.Monad.State.Strict
                    (MonadIO, State, evalState, put, runStateT)
 import           Control.Monad.Trans.Control
                    (MonadBaseControl, liftBaseWith)
@@ -59,8 +59,6 @@ import           Data.Set
 import qualified Data.Set                          as S
 import           Data.Tree
                    (Tree(Node))
-import           GHC.Generics
-                   (Generic1, Rep1)
 import           Prelude
 import           Test.QuickCheck
                    (Gen, Property, Testable, choose, property,
@@ -73,7 +71,6 @@ import           Text.Show.Pretty
                    (ppShow)
 
 import           Test.StateMachine.BoxDrawer
-import           Test.StateMachine.ConstructorName
 import           Test.StateMachine.Logic
 import           Test.StateMachine.Sequential
 import           Test.StateMachine.Types
@@ -83,8 +80,7 @@ import           Test.StateMachine.Utils
 ------------------------------------------------------------------------
 
 forAllParallelCommands :: Testable prop
-                       => (Show (cmd Symbolic), Show (model Symbolic))
-                       => (Generic1 cmd, GConName1 (Rep1 cmd))
+                       => (Show (model Symbolic), Show (cmd Symbolic))
                        => (Rank2.Foldable cmd, Rank2.Foldable resp)
                        => StateMachine model cmd m resp
                        -> (ParallelCommands cmd -> prop)     -- ^ Predicate.
@@ -92,9 +88,8 @@ forAllParallelCommands :: Testable prop
 forAllParallelCommands sm =
   forAllShrinkShow (generateParallelCommands sm) (shrinkParallelCommands sm) ppShow
 
-generateParallelCommands :: forall model cmd m resp
-                          . (Rank2.Foldable resp, Show (model Symbolic))
-                         => (Generic1 cmd, GConName1 (Rep1 cmd))
+generateParallelCommands :: forall model cmd m resp. Rank2.Foldable resp
+                         => (Show (model Symbolic), Show (cmd Symbolic))
                          => StateMachine model cmd m resp
                          -> Gen (ParallelCommands cmd)
 generateParallelCommands sm@StateMachine { initModel } = do
