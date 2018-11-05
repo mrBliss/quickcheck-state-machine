@@ -1,3 +1,12 @@
+#### 0.5.0 (201?-?-?)
+
+  * Add possibility to generate commands using a Markov chain, similar to how
+    they do it in the Cleanroom software engineering literature;
+
+  * Show counterexamples when parallel property fails;
+
+  * Catch and display exceptions thrown in the semantics of commands.
+
 #### 0.4.2 (2018-9-3)
 
   * Fix bug that made tests fail on systems without docker;
