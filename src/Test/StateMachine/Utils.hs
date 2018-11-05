@@ -27,7 +27,6 @@ module Test.StateMachine.Utils
   , suchThatMaybeN
   , suchThatOneOf
   , suchThatEither
-  , bigSample
   )
   where
 
@@ -35,7 +34,7 @@ import           Prelude
 import           Test.QuickCheck
                    (Gen, Property, Testable, again, counterexample,
                    frequency, resize, shrinking, sized, suchThatMaybe,
-                   whenFail, generate)
+                   whenFail)
 import           Test.QuickCheck.Monadic
                    (PropertyM(MkPropertyM))
 import           Test.QuickCheck.Property
@@ -115,7 +114,7 @@ gens0 `suchThatOneOf` p = go gens0 (length gens0 - 1)
              Nothing -> go (gens' ++ gens'') (n - 1)
 
 suchThatEither :: Gen a -> (a -> Bool) -> Gen (Either [a] a)
-gen `suchThatEither` p = sized (try [] 0 . max 1)
+gen `suchThatEither` p = sized (try [] 0 . max 100)
   where
     try ces _ 0 = return (Left (reverse ces))
     try ces k n = do
@@ -123,12 +122,3 @@ gen `suchThatEither` p = sized (try [] 0 . max 1)
       if p x
       then return (Right x)
       else try (x : ces) (k + 1) (n - 1)
-
-bigSample' :: Gen a -> IO [a]
-bigSample' g =
-  generate (sequence [ resize n g | n <- [0,20..2000] ])
-
-bigSample :: Show a => Gen a -> IO ()
-bigSample g = do
-  cases <- bigSample' g
-  mapM_ print cases
