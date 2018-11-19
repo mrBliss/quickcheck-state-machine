@@ -383,7 +383,7 @@ checkCommandNames :: forall cmd. (Generic1 cmd, GConName1 (Rep1 cmd))
                   => Commands cmd -> Property -> Property
 checkCommandNames cmds
   = collect names
-  . cover (length names == numOfConstructors) 1 "coverage"
+  . cover (length names == numOfConstructors) 0 "coverage"
   where
     names             = commandNames cmds
     numOfConstructors = length (gconNames1 (Proxy :: Proxy (Rep1 cmd Symbolic)))
