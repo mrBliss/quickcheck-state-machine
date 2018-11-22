@@ -49,7 +49,7 @@ import           Control.Concurrent.STM
 import           Control.Concurrent.STM.TChan
                    (TChan, newTChanIO, tryReadTChan, writeTChan)
 import           Control.Exception
-                   (ErrorCall, IOException, displayException)
+                   (ErrorCall, IOException, displayException, try)
 import           Control.Monad.Catch
                    (MonadCatch, catch)
 import           Control.Monad.State
@@ -292,21 +292,28 @@ executeCommands StateMachine { transition, postcondition, invariant, semantics }
           return ExceptionThrown
         Right cresp -> do
           liftBaseWith (const (atomically (writeTChan hchan (pid, Response cresp))))
+
+          let continue = do
+                let catchErrorCall :: a -> IO (Either ErrorCall a)
+                    catchErrorCall = try . return
+                emodel' <- liftBaseWith (const (catchErrorCall (transition model ccmd cresp)))
+                case emodel' of
+                  Left  err    -> do
+                    liftBaseWith (const (atomically (writeTChan hchan (pid, Exception (displayException err)))))
+                    return ExceptionThrownInTransitionFunction
+                  Right model' -> do
+                    put ( insertConcretes (S.toList vars) (getUsedConcrete cresp) env
+                        , model'
+                        )
+                    go cmds
           if check
           then case logic (postcondition model ccmd cresp) of
             VFalse ce -> return (PostconditionFailed (show ce))
             VTrue     -> case logic (fromMaybe (const Top) invariant model) of
                            VFalse ce' -> return (InvariantBroken (show ce'))
-                           VTrue      -> do
-                             put ( insertConcretes (S.toList vars) (getUsedConcrete cresp) env
-                                 , transition model ccmd cresp
-                                 )
-                             go cmds
-          else do
-            put ( insertConcretes (S.toList vars) (getUsedConcrete cresp) env
-                , transition model ccmd cresp
-                )
-            go cmds
+                           VTrue      -> continue
+          else
+            continue
 
 getUsedConcrete :: Rank2.Foldable f => f Concrete -> [Dynamic]
 getUsedConcrete = Rank2.foldMap (\(Concrete x) -> [toDyn x])
