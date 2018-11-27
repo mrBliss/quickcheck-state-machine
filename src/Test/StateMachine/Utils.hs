@@ -25,19 +25,30 @@ module Test.StateMachine.Utils
   , shrinkPair
   , shrinkPair'
   , suchThatOneOf
+  , probabilisticCheck
   )
   where
 
+import           Data.Function
+                   (on)
+import           Data.List
+                   (nubBy)
 import           Prelude
 import           Test.QuickCheck
-                   (Gen, Property, Testable, again, counterexample,
-                   frequency, resize, shrinking, sized, suchThatMaybe,
+                   (Gen, Property, Testable, again, chatty,
+                   counterexample, failingTestCase, frequency,
+                   maxSuccess, quickCheckWithResult, resize, shrinking,
+                   sized, stdArgs, suchThatMaybe, usedSeed, usedSize,
                    whenFail)
 import           Test.QuickCheck.Monadic
                    (PropertyM(MkPropertyM))
 import           Test.QuickCheck.Property
                    (Property(MkProperty), property, unProperty, (.&&.),
                    (.||.))
+import           Test.QuickCheck.Random
+                   (QCGen)
+import           Test.QuickCheck.Test
+                   (isSuccess)
 #if !MIN_VERSION_QuickCheck(2,10,0)
 import           Test.QuickCheck.Property
                    (succeeded)
@@ -110,3 +121,27 @@ gens0 `suchThatOneOf` p = go gens0 (length gens0 - 1)
            case mx of
              Just x  -> return (Just x)
              Nothing -> go (gens' ++ gens'') (n - 1)
+
+probabilisticCheck :: Testable prop => Int -> prop -> IO ()
+probabilisticCheck threshold prop = go 0 30 []
+  where
+    go :: Int -> Int -> [([String], QCGen)] -> IO ()
+    go 100 _sz ces = output (reverse ces)
+    go n   sz  ces = do
+      let args  = stdArgs { maxSuccess = 1, chatty = False }
+          prop' = MkProperty (resize sz (unProperty (property prop)))
+      res <- quickCheckWithResult args prop'
+      if isSuccess res
+      -- XXX: We are not doing the right thing with size here...
+      then go (n + 1) sz ces
+      else go (n + 1) (usedSize res) ((failingTestCase res, usedSeed res) : ces)
+
+    output ces =
+      let
+        success = 100 - length ces
+        prefix  = if success >= threshold
+                  then "+++ OK, "
+                  else "*** Failed, only "
+      in do
+        putStrLn (prefix ++ show success ++ "% succeeded")
+        print (nubBy ((==) `on` fst) ces)
