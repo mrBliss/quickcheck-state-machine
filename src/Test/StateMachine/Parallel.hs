@@ -56,9 +56,13 @@ import           Data.Monoid
                    ((<>))
 import           Data.Set
                    (Set)
-import qualified Data.Set                          as S
+import qualified Data.Set                        as S
 import           Data.Tree
                    (Tree(Node))
+import           Generic.Data
+                   (FiniteEnum, GBounded, GEnum)
+import           GHC.Generics
+                   (Generic, Rep)
 import           Prelude
 import           Test.QuickCheck
                    (Gen, Property, Testable, choose, property,
@@ -74,14 +78,14 @@ import           Test.StateMachine.BoxDrawer
 import           Test.StateMachine.Logic
 import           Test.StateMachine.Sequential
 import           Test.StateMachine.Types
-import qualified Test.StateMachine.Types.Rank2     as Rank2
+import qualified Test.StateMachine.Types.Rank2   as Rank2
 import           Test.StateMachine.Utils
 
 ------------------------------------------------------------------------
 
 forAllParallelCommands :: Testable prop
-                       => (Show (model Symbolic), Show (cmd Symbolic))
-                       => (Eq submodel, Show submodel)
+                       => (Show (model Symbolic), Show submodel, Show (cmd Symbolic))
+                       => (Generic submodel, GEnum FiniteEnum (Rep submodel), GBounded (Rep submodel))
                        => (Rank2.Foldable cmd, Rank2.Foldable resp)
                        => AdvancedStateMachine model submodel cmd m resp
                        -> (ParallelCommands cmd -> prop)     -- ^ Predicate.
@@ -90,8 +94,8 @@ forAllParallelCommands sm =
   forAllShrinkShow (generateParallelCommands sm) (shrinkParallelCommands sm) ppShow
 
 generateParallelCommands :: forall model submodel cmd m resp. Rank2.Foldable resp
-                         => (Show (model Symbolic), Show (cmd Symbolic))
-                         => (Eq submodel, Show submodel)
+                         => (Show (model Symbolic), Show submodel, Show (cmd Symbolic))
+                         => (Generic submodel, GEnum FiniteEnum (Rep submodel), GBounded (Rep submodel))
                          => AdvancedStateMachine model submodel cmd m resp
                          -> Gen (ParallelCommands cmd)
 generateParallelCommands sm@StateMachine { initModel } = do
