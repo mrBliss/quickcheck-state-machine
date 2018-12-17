@@ -84,19 +84,19 @@ import           Test.StateMachine.Utils
 ------------------------------------------------------------------------
 
 forAllParallelCommands :: Testable prop
-                       => (Show (model Symbolic), Show submodel, Show (cmd Symbolic))
-                       => (Generic submodel, GEnum FiniteEnum (Rep submodel), GBounded (Rep submodel))
+                       => (Show (model Symbolic), Show state, Show (cmd Symbolic))
+                       => (Generic state, GEnum FiniteEnum (Rep state), GBounded (Rep state))
                        => (Rank2.Foldable cmd, Rank2.Foldable resp)
-                       => AdvancedStateMachine model submodel cmd m resp
+                       => AdvancedStateMachine model state cmd m resp
                        -> (ParallelCommands cmd -> prop)     -- ^ Predicate.
                        -> Property
 forAllParallelCommands sm =
   forAllShrinkShow (generateParallelCommands sm) (shrinkParallelCommands sm) ppShow
 
-generateParallelCommands :: forall model submodel cmd m resp. Rank2.Foldable resp
-                         => (Show (model Symbolic), Show submodel, Show (cmd Symbolic))
-                         => (Generic submodel, GEnum FiniteEnum (Rep submodel), GBounded (Rep submodel))
-                         => AdvancedStateMachine model submodel cmd m resp
+generateParallelCommands :: forall model state cmd m resp. Rank2.Foldable resp
+                         => (Show (model Symbolic), Show state, Show (cmd Symbolic))
+                         => (Generic state, GEnum FiniteEnum (Rep state), GBounded (Rep state))
+                         => AdvancedStateMachine model state cmd m resp
                          -> Gen (ParallelCommands cmd)
 generateParallelCommands sm@StateMachine { initModel } = do
   Commands cmds      <- generateCommands sm Nothing
@@ -129,7 +129,7 @@ generateParallelCommands sm@StateMachine { initModel } = do
 
 -- | A list of commands is parallel safe if the pre-conditions for all commands
 --   hold in all permutations of the list.
-parallelSafe :: AdvancedStateMachine model submodel cmd m resp -> model Symbolic
+parallelSafe :: AdvancedStateMachine model state cmd m resp -> model Symbolic
              -> Counter -> Commands cmd -> Bool
 parallelSafe StateMachine { precondition, transition, mock } model0 counter0
   = and
@@ -146,7 +146,7 @@ parallelSafe StateMachine { precondition, transition, mock } model0 counter0
           preconditionsHold (transition model cmd resp) counter' cmds
 
 -- | Apply the transition of some commands to a model.
-advanceModel :: AdvancedStateMachine model submodel cmd m resp
+advanceModel :: AdvancedStateMachine model state cmd m resp
              -> model Symbolic  -- ^ The model.
              -> Counter
              -> Commands cmd    -- ^ The commands.
@@ -166,9 +166,9 @@ advanceModel StateMachine { transition, mock } model0 counter0 =
 -- | Shrink a parallel program in a pre-condition and scope respecting
 --   way.
 shrinkParallelCommands
-  :: forall cmd model submodel m resp. Rank2.Foldable cmd
+  :: forall cmd model state m resp. Rank2.Foldable cmd
   => Rank2.Foldable resp
-  => AdvancedStateMachine model submodel cmd m resp
+  => AdvancedStateMachine model state cmd m resp
   -> (ParallelCommands cmd -> [ParallelCommands cmd])
 shrinkParallelCommands sm@StateMachine { shrinker, initModel }
                        (ParallelCommands prefix suffixes)
@@ -208,9 +208,9 @@ shrinkParallelCommands sm@StateMachine { shrinker, initModel }
       map (id *** flip (,) ys) (pickOneReturnRest xs) ++
       map (id ***      (,) xs) (pickOneReturnRest ys)
 
-validParallelCommands :: forall model submodel cmd m resp.
+validParallelCommands :: forall model state cmd m resp.
                          (Rank2.Foldable cmd, Rank2.Foldable resp)
-                      => AdvancedStateMachine model submodel cmd m resp
+                      => AdvancedStateMachine model state cmd m resp
                       -> ParallelCommands cmd
                       -> State (model Symbolic, Set Var, Counter) (Maybe (ParallelCommands cmd))
 validParallelCommands sm@StateMachine { initModel } (ParallelCommands prefix suffixes) = do
@@ -243,7 +243,7 @@ validParallelCommands sm@StateMachine { initModel } (ParallelCommands prefix suf
           then return (Just (ParallelCommands (Commands prefix') suffixes'))
           else return Nothing
 
-parallelSafeMany :: AdvancedStateMachine model submodel cmd m resp -> model Symbolic
+parallelSafeMany :: AdvancedStateMachine model state cmd m resp -> model Symbolic
                  -> Counter -> [Pair (Commands cmd)] -> Bool
 parallelSafeMany sm = go
   where
@@ -262,7 +262,7 @@ prop_splitCombine xs = splitPlacesBlanks (map length xs) (concat xs) == xs
 runParallelCommands :: (Show (cmd Concrete), Show (resp Concrete))
                     => (Rank2.Traversable cmd, Rank2.Foldable resp)
                     => (MonadCatch m, MonadBaseControl IO m)
-                    => AdvancedStateMachine model submodel cmd m resp
+                    => AdvancedStateMachine model state cmd m resp
                     -> ParallelCommands cmd
                     -> PropertyM m [(History cmd resp, Logic)]
 runParallelCommands sm = runParallelCommandsNTimes 10 sm
@@ -271,7 +271,7 @@ runParallelCommandsNTimes :: (Show (cmd Concrete), Show (resp Concrete))
                           => (Rank2.Traversable cmd, Rank2.Foldable resp)
                           => (MonadCatch m, MonadBaseControl IO m)
                           => Int -- ^ How many times to execute the parallel program.
-                          -> AdvancedStateMachine model submodel cmd m resp
+                          -> AdvancedStateMachine model state cmd m resp
                           -> ParallelCommands cmd
                           -> PropertyM m [(History cmd resp, Logic)]
 runParallelCommandsNTimes n sm cmds =
@@ -281,7 +281,7 @@ runParallelCommandsNTimes n sm cmds =
 
 executeParallelCommands :: (Rank2.Traversable cmd, Rank2.Foldable resp)
                         => (MonadCatch m, MonadBaseControl IO m)
-                        => AdvancedStateMachine model submodel cmd m resp
+                        => AdvancedStateMachine model state cmd m resp
                         -> ParallelCommands cmd
                         -> m (History cmd resp, Reason)
 executeParallelCommands sm@StateMachine{ initModel } (ParallelCommands prefix suffixes) = do
@@ -323,9 +323,9 @@ executeParallelCommands sm@StateMachine{ initModel } (ParallelCommands prefix su
 -- | Try to linearise a history of a parallel program execution using a
 --   sequential model. See the *Linearizability: a correctness condition for
 --   concurrent objects* paper linked to from the README for more info.
-linearise :: forall model submodel cmd m resp.
+linearise :: forall model state cmd m resp.
              (Show (cmd Concrete), Show (resp Concrete))
-          => AdvancedStateMachine model submodel cmd m resp
+          => AdvancedStateMachine model state cmd m resp
           -> History cmd resp -> Logic
 linearise StateMachine { transition,  postcondition, initModel } = go . unHistory
   where
