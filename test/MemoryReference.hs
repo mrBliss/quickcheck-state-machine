@@ -33,7 +33,7 @@ import           Prelude                       hiding
                    (elem)
 import qualified Prelude
 import           System.Random
-                   (randomRIO)
+                   (randomRIO, randomIO)
 import           Test.QuickCheck
                    (Gen, Property, arbitrary, elements, frequency,
                    once, shrink, (===))
@@ -60,7 +60,7 @@ deriving instance Show (Command Symbolic)
 deriving instance Show (Command Concrete)
 
 data Response r
-  = Created (Reference (Opaque (IORef Int)) r)
+  = Created (Either String (Reference (Opaque (IORef Int)) r))
   | ReadValue Int
   | Written
   | Incremented
@@ -80,7 +80,8 @@ initModel = Model empty
 
 transition :: Eq1 r => Model r -> Command r -> Response r -> Model r
 transition m@(Model model) cmd resp = case (cmd, resp) of
-  (Create, Created ref)        -> Model ((ref, 0) : model)
+  (Create, Created (Left _))   -> m
+  (Create, Created (Right ref)) -> Model ((ref, 0) : model)
   (Read _, ReadValue _)        -> m
   (Write ref x, Written)       -> Model (update ref x model)
   (Increment ref, Incremented) -> case lookup ref model of
@@ -100,7 +101,8 @@ precondition (Model m) cmd = case cmd of
 
 postcondition :: Model Concrete -> Command Concrete -> Response Concrete -> Logic
 postcondition (Model m) cmd resp = case (cmd, resp) of
-  (Create,        Created ref) -> m' ! ref .== 0 .// "Create"
+  (Create,        Created (Left _)) -> Top
+  (Create,        Created (Right ref)) -> m' ! ref .== 0 .// "Create"
     where
       Model m' = transition (Model m) cmd resp
   (Read ref,      ReadValue v)  -> v .== m ! ref .// "Read"
@@ -116,7 +118,11 @@ data Bug
 
 semantics :: Bug -> Command Concrete -> IO (Response Concrete)
 semantics bug cmd = case cmd of
-  Create        -> Created     <$> (reference . Opaque <$> newIORef 0)
+  Create        -> Created <$> do
+    err <- randomIO
+    if err
+      then pure $ Left "newIORef failed"
+      else Right . reference . Opaque <$> newIORef 0
   Read ref      -> ReadValue   <$> readIORef  (opaque ref)
   Write ref i   -> Written     <$  writeIORef (opaque ref) i'
     where
@@ -138,7 +144,7 @@ semantics bug cmd = case cmd of
 
 mock :: Model Symbolic -> Command Symbolic -> GenSym (Response Symbolic)
 mock (Model m) cmd = case cmd of
-  Create      -> Created   <$> genSym
+  Create      -> Created . Right <$> genSym
   Read ref    -> ReadValue <$> pure (m ! ref)
   Write _ _   -> pure Written
   Increment _ -> pure Incremented
